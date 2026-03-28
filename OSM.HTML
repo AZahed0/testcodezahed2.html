@@ -1,0 +1,1006 @@
+
+<!DOCTYPE html>
+<html lang="nl" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Routeplanner Den Helder</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Leaflet Control Geocoder -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Inter', system-ui, sans-serif;
+            overflow: hidden;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 350px;
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+        .dark .sidebar {
+            background: #1f2937;
+            color: white;
+        }
+        .toggle-sidebar {
+            position: fixed;
+            top: 12px;
+            left: 360px;
+            z-index: 1001;
+            background: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .dark .toggle-sidebar {
+            background: #374151;
+            color: white;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #374151;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .dark .tab-btn {
+            color: #e5e7eb;
+        }
+        .tab-btn.active, .tab-btn:hover {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+        }
+        .tab-content {
+            padding: 16px;
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .waypoint-item {
+            padding: 8px;
+            margin: 4px 0;
+            border-radius: 6px;
+            background: #f9fafb;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid #3b82f6;
+        }
+        .waypoint-item.start { border-left-color: #10b981; }
+        .waypoint-item.end { border-left-color: #ef4444; }
+        .dark .waypoint-item {
+            background: #374151;
+        }
+        .waypoint-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .search-container {
+            position: fixed;
+            top: 12px;
+            left: 410px;
+            z-index: 1000;
+            width: 300px;
+            background: white;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .dark .search-container {
+            background: #1f2937;
+            color: white;
+        }
+        .route-info, .service-info {
+            background: rgba(255,255,255,0.95);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            backdrop-filter: blur(10px);
+        }
+        .dark .route-info, .dark .service-info {
+            background: rgba(55,65,81,0.95);
+            color: white;
+        }
+        .first-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 999;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .status-message {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 1000;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .status-hidden {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        .status-success { background: #10b981; color: white; }
+        .status-error { background: #ef4444; color: white; }
+        .loading-spinner.active {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: #4b5563;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #6b7280;
+        }
+        .waypoint-marker-start, .waypoint-marker-end, .waypoint-marker-intermediate {
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .waypoint-marker-start { background-color: #10b981; width: 24px; height: 24px; }
+        .waypoint-marker-end { background-color: #ef4444; width: 24px; height: 24px; }
+        .waypoint-marker-intermediate { background-color: #3b82f6; width: 20px; height: 20px; }
+        .marker-label {
+            position: absolute;
+            top: -10px;
+            left: 30px;
+            background: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .dark .marker-label {
+            background: #374151;
+            color: white;
+        }
+        .data-explorer-modal {
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .data-explorer-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .dark .data-explorer-content {
+            background: #374151;
+            color: white;
+        }
+        .suggestions-container {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1001;
+            display: none;
+        }
+        .dark .suggestions-container {
+            background: #1f2937;
+            color: white;
+        }
+        .suggestion-item {
+            padding: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .suggestion-item:hover, .suggestion-item:focus {
+            background: #e5e7eb;
+        }
+        .dark .suggestion-item:hover, .dark .suggestion-item:focus {
+            background: #4b5563;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                max-width: 350px;
+            }
+            .toggle-sidebar {
+                left: 12px;
+            }
+            .search-container {
+                left: 60px;
+                width: calc(100% - 80px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Map -->
+    <div id="map"></div>
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="p-5">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-xl font-bold text-blue-800 dark:text-blue-300">
+                    <i class="fas fa-route mr-2"></i>Routeplanner Den Helder
+                </h1>
+                <button id="themeToggle" class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white p-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+            <!-- Base Map Selection -->
+            <div class="mb-4">
+                <label for="baseMap" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Basiskaart</label>
+                <select id="baseMap" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="carto-positron">CartoDB Positron</option>
+                    <option value="carto-dark">CartoDB Dark</option>
+                    <option value="stamen-terrain">Stamen Terrain</option>
+                </select>
+            </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                <button class="tab-btn active" data-tab="route"><i class="fas fa-route mr-2"></i>Route</button>
+                <button class="tab-btn" data-tab="isochrone"><i class="fas fa-chart-area mr-2"></i>Bereik</button>
+                <button class="tab-btn" data-tab="help"><i class="fas fa-question-circle mr-2"></i>Help</button>
+            </div>
+            <!-- Route Tab -->
+            <div id="tab-route" class="tab-content active">
+                <div class="mb-4">
+                    <label for="transportMode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vervoermiddel</label>
+                    <select id="transportMode" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500">
+                        <option value="driving-car">Auto</option>
+                        <option value="cycling-regular">Fiets</option>
+                        <option value="foot-walking">Lopen</option>
+                        <option value="driving-hgv">Vrachtwagen</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold dark:text-white">Routepunten</h2>
+                        <div class="flex space-x-1">
+                            <button id="reverseRoute" class="text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded-lg transition" title="Route omkeren">
+                                <i class="fas fa-exchange-alt"></i>
+                            </button>
+                            <button id="addWaypoint" class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded-lg transition">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="waypointsContainer" class="space-y-2 max-h-40 overflow-y-auto custom-scrollbar p-1 border rounded-lg dark:border-gray-700"></div>
+                </div>
+                <button id="showRoute" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition flex items-center justify-center">
+                    <span class="loading-spinner mr-2"><i class="fas fa-spinner"></i></span>
+                    <i class="fas fa-route mr-2"></i>Bereken Route
+                </button>
+                <div id="routeInfo" class="route-info hidden mt-4">
+                    <h3 class="font-semibold mb-2"><i class="fas fa-info-circle mr-1"></i>Route-informatie</h3>
+                    <p><i class="fas fa-road mr-1"></i>Afstand: <span id="distance">-</span></p>
+                    <p><i class="fas fa-clock mr-1"></i>Reistijd: <span id="duration">-</span></p>
+                </div>
+            </div>
+            <!-- Isochrone Tab -->
+            <div id="tab-isochrone" class="tab-content">
+                <h3 class="text-lg font-semibold mb-3 dark:text-white">Bereik Instellingen</h3>
+                <div class="mb-4">
+                    <label for="timeInput" class="block text-sm font-medium mb-1">Tijd (minuten)</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" id="timeInput" min="1" max="180" value="15" class="w-20 p-2 border rounded-lg text-center dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500">
+                        <span>min</span>
+                    </div>
+                    <input type="range" id="timeRange" min="1" max="180" step="1" value="15" class="w-full mt-2 accent-blue-500">
+                    <div class="flex justify-between text-xs mt-1 text-gray-600 dark:text-gray-400">
+                        <span>1 min</span>
+                        <span id="timeValue">15 min</span>
+                        <span>180 min</span>
+                    </div>
+                </div>
+                <button id="showServiceArea" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition flex items-center justify-center">
+                    <span class="loading-spinner mr-2"><i class="fas fa-spinner"></i></span>
+                    <i class="fas fa-chart-area mr-2"></i>Toon Bereik
+                </button>
+                <div id="serviceInfo" class="service-info hidden mt-4">
+                    <h3 class="font-semibold mb-2"><i class="fas fa-info-circle mr-1"></i>Bereik-informatie</h3>
+                    <p><i class="fas fa-expand-arrows-alt mr-1"></i>Oppervlakte: <span id="isochroneArea">-</span></p>
+                </div>
+            </div>
+            <!-- Help Tab -->
+            <div id="tab-help" class="tab-content">
+                <h3 class="text-lg font-semibold mb-3 dark:text-white">Hoe werkt het?</h3>
+                <div class="space-y-3 text-sm dark:text-gray-300">
+                    <div class="flex items-start">
+                        <i class="fas fa-map-marker-alt text-blue-500 mt-1 mr-2"></i>
+                        <p>Klik op de kaart om routepunten toe te voegen. Sleep markers om ze te verplaatsen.</p>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-route text-green-500 mt-1 mr-2"></i>
+                        <p>Selecteer een vervoermiddel en bereken een route of bereik.</p>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-search text-purple-500 mt-1 mr-2"></i>
+                        <p>Zoek adressen in Den Helder via de zoekbalk met suggesties.</p>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-download text-yellow-500 mt-1 mr-2"></i>
+                        <p>Exporteer routes en bereiken als GeoJSON via de actieknoppen.</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Action Buttons -->
+            <div class="mt-6 pt-4 border-t dark:border-gray-700">
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <button id="exportData" class="bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg transition flex items-center justify-center">
+                        <i class="fas fa-download mr-2"></i>Exporteren
+                    </button>
+                    <button id="exploreData" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg transition flex items-center justify-center">
+                        <i class="fas fa-search mr-2"></i>Data Bekijken
+                    </button>
+                </div>
+                <button id="clearAll" class="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg transition flex items-center justify-center">
+                    <i class="fas fa-trash-alt mr-2"></i>Alles Wissen
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Toggle Sidebar Button -->
+    <div id="toggleSidebar" class="toggle-sidebar">
+        <i class="fas fa-bars"></i>
+    </div>
+    <!-- Search Container -->
+    <div class="search-container relative">
+        <div class="flex">
+            <input type="text" id="searchInput" placeholder="Zoek adres in Den Helder..." class="flex-1 p-2 border rounded-l-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" aria-label="Zoek locatie">
+            <button id="searchBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-3 rounded-r-lg transition" aria-label="Zoeken">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        <div id="suggestions" class="suggestions-container"></div>
+    </div>
+    <!-- Status Message -->
+    <div id="statusMessage" class="status-message status-hidden"></div>
+    <!-- Data Explorer Modal -->
+    <div id="dataExplorerModal" class="fixed inset-0 data-explorer-modal hidden">
+        <div class="data-explorer-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold"><i class="fas fa-search mr-2 text-blue-600"></i>Data Explorer</h3>
+                <button id="closeExplorer" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-semibold dark:text-white">Route Data</h4>
+                    <pre id="routeDataPreview" class="bg-gray-100 dark:bg-gray-700 p-3 rounded text-sm overflow-x-auto dark:text-gray-300 max-h-40"></pre>
+                </div>
+                <div>
+                    <h4 class="font-semibold dark:text-white">Bereik Data</h4>
+                    <pre id="isochroneDataPreview" class="bg-gray-100 dark:bg-gray-700 p-3 rounded text-sm overflow-x-auto dark:text-gray-300 max-h-40"></pre>
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end space-x-2">
+                <button id="copyGeoJSON" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition">
+                    <i class="fas fa-copy mr-2"></i>Kopieer GeoJSON
+                </button>
+                <button id="downloadGeoJSON" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition">
+                    <i class="fas fa-download mr-2"></i>Download GeoJSON
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <script>
+        'use strict';
+        const ORS_API_KEY = 'API_ZAHED';
+        // Map initialization
+        const map = L.map('map').setView([52.9593, 4.7597], 13);
+        const baseMaps = {
+            'osm': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }),
+            'carto-positron': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }),
+            'carto-dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }),
+            'stamen-terrain': L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>'
+            })
+        };
+        let currentBaseMap = 'osm';
+        baseMaps[currentBaseMap].addTo(map);
+        // Variables
+        let waypoints = [];
+        let routeLayer = null;
+        let isochroneLayer = null;
+        let markersLayer = L.layerGroup().addTo(map);
+        let currentRouteData = null;
+        let currentIsochroneData = null;
+        let theme = 'light';
+        let hasClickedMap = false;
+        let searchTimeout = null;
+        const transportColors = {
+            'driving-car': '#1d4ed8',
+            'cycling-regular': '#059669',
+            'foot-walking': '#059669',
+            'driving-hgv': '#b91c1c'
+        };
+        // DOM elements
+        const sidebar = document.getElementById('sidebar');
+        const toggleSidebarBtn = document.getElementById('toggleSidebar');
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const waypointsContainer = document.getElementById('waypointsContainer');
+        const transportMode = document.getElementById('transportMode');
+        const timeInput = document.getElementById('timeInput');
+        const timeRange = document.getElementById('timeRange');
+        const timeValue = document.getElementById('timeValue');
+        const showRouteBtn = document.getElementById('showRoute');
+        const showServiceAreaBtn = document.getElementById('showServiceArea');
+        const reverseRouteBtn = document.getElementById('reverseRoute');
+        const addWaypointBtn = document.getElementById('addWaypoint');
+        const clearAllBtn = document.getElementById('clearAll');
+        const exportDataBtn = document.getElementById('exportData');
+        const exploreDataBtn = document.getElementById('exploreData');
+        const copyGeoJSONBtn = document.getElementById('copyGeoJSON');
+        const downloadGeoJSONBtn = document.getElementById('downloadGeoJSON');
+        const closeExplorerBtn = document.getElementById('closeExplorer');
+        const dataExplorerModal = document.getElementById('dataExplorerModal');
+        const routeDataPreview = document.getElementById('routeDataPreview');
+        const isochroneDataPreview = document.getElementById('isochroneDataPreview');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const suggestionsContainer = document.getElementById('suggestions');
+        const baseMapSelect = document.getElementById('baseMap');
+        const routeInfo = document.getElementById('routeInfo');
+        const serviceInfo = document.getElementById('serviceInfo');
+        const distanceElement = document.getElementById('distance');
+        const durationElement = document.getElementById('duration');
+        const isochroneAreaElement = document.getElementById('isochroneArea');
+        const statusMessage = document.getElementById('statusMessage');
+        // Helper functions
+        function showStatus(message, type = 'success', duration = 3000) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type === 'error' ? 'status-error' : 'status-success'}`;
+            setTimeout(() => statusMessage.classList.add('status-hidden'), duration);
+        }
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (theme === 'light') {
+                html.classList.add('dark');
+                theme = 'dark';
+                document.getElementById('themeToggle').innerHTML = '<i class="fas fa-sun"></i>';
+                if (currentBaseMap === 'osm') {
+                    baseMapSelect.value = 'carto-dark';
+                    switchBaseMap('carto-dark');
+                }
+            } else {
+                html.classList.remove('dark');
+                theme = 'light';
+                document.getElementById('themeToggle').innerHTML = '<i class="fas fa-moon"></i>';
+                if (currentBaseMap === 'carto-dark') {
+                    baseMapSelect.value = 'osm';
+                    switchBaseMap('osm');
+                }
+            }
+        }
+        function switchBaseMap(mapType) {
+            if (currentBaseMap === mapType) return;
+            if (baseMaps[currentBaseMap]) map.removeLayer(baseMaps[currentBaseMap]);
+            baseMaps[mapType].addTo(map);
+            currentBaseMap = mapType;
+        }
+        function toggleSidebar() {
+            sidebar.classList.toggle('collapsed');
+            const icon = toggleSidebarBtn.querySelector('i');
+            icon.className = sidebar.classList.contains('collapsed') ? 'fas fa-bars' : 'fas fa-times';
+        }
+        function switchTab(tabName) {
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+        function showLoading(buttonId) {
+            const btn = document.getElementById(buttonId);
+            btn.querySelector('.loading-spinner').classList.add('active');
+            btn.disabled = true;
+        }
+        function hideLoading(buttonId) {
+            const btn = document.getElementById(buttonId);
+            btn.querySelector('.loading-spinner').classList.remove('active');
+            btn.disabled = false;
+        }
+        function addWaypoint(latlng = null, index = null) {
+            const defaultLatLng = latlng || map.getCenter();
+            const waypointId = index !== null ? index : waypoints.length;
+            const markerClass = waypointId === 0 ? 'waypoint-marker-start' : waypointId === waypoints.length ? 'waypoint-marker-end' : 'waypoint-marker-intermediate';
+            const marker = L.marker(defaultLatLng, {
+                icon: L.divIcon({
+                    className: markerClass,
+                    html: `<div class="marker-label">${waypointId + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }),
+                draggable: true
+            }).addTo(markersLayer);
+            marker.bindPopup(`
+                <div class="popup-content">
+                    <h4 class="font-bold mb-2">Punt ${waypointId + 1}</h4>
+                    <p class="text-sm">Lat: ${defaultLatLng.lat.toFixed(6)}</p>
+                    <p class="text-sm">Lng: ${defaultLatLng.lng.toFixed(6)}</p>
+                    <button class="mt-2 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition remove-waypoint" data-id="${waypointId}">
+                        <i class="fas fa-trash mr-1"></i>Verwijder
+                    </button>
+                </div>
+            `);
+            if (index !== null) {
+                waypoints[index] = { id: waypointId, marker, latlng: defaultLatLng };
+            } else {
+                waypoints.push({ id: waypointId, marker, latlng: defaultLatLng });
+            }
+            marker.on('dragend', () => {
+                waypoints[waypointId].latlng = marker.getLatLng();
+                updateWaypointUI();
+            });
+            updateWaypointUI();
+            if (!hasClickedMap) {
+                hasClickedMap = true;
+                const hint = document.createElement('div');
+                hint.className = 'first-hint';
+                hint.textContent = 'Klik op de kaart om een punt toe te voegen';
+                document.body.appendChild(hint);
+                setTimeout(() => hint.remove(), 3000);
+            }
+        }
+        function updateWaypointUI() {
+            waypointsContainer.innerHTML = '';
+            waypoints.forEach((wp, i) => {
+                const typeClass = i === 0 ? 'start' : i === waypoints.length - 1 ? 'end' : '';
+                const label = i === 0 ? 'Startpunt' : i === waypoints.length - 1 ? 'Eindpunt' : `Tussenpunt ${i + 1}`;
+                const waypointElement = document.createElement('div');
+                waypointElement.className = `waypoint-item ${typeClass} p-2 rounded flex justify-between items-center`;
+                waypointElement.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 ${i === 0 ? 'bg-green-500' : i === waypoints.length - 1 ? 'bg-red-500' : 'bg-blue-500'} text-white">${i + 1}</span>
+                        <span class="text-sm">${label}: ${wp.latlng.lat.toFixed(4)}, ${wp.latlng.lng.toFixed(4)}</span>
+                    </div>
+                    <div class="flex space-x-1">
+                        <button class="text-xs bg-blue-500 hover:bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center move-up" data-id="${i}" ${i === 0 ? 'disabled' : ''}>
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button class="text-xs bg-blue-500 hover:bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center move-down" data-id="${i}" ${i === waypoints.length - 1 ? 'disabled' : ''}>
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                        <button class="text-xs bg-red-500 hover:bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center remove-waypoint" data-id="${i}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                waypointsContainer.appendChild(waypointElement);
+            });
+            document.querySelectorAll('.remove-waypoint').forEach(btn => {
+                btn.addEventListener('click', () => removeWaypoint(parseInt(btn.dataset.id)));
+            });
+            document.querySelectorAll('.move-up').forEach(btn => {
+                btn.addEventListener('click', () => moveWaypoint(parseInt(btn.dataset.id), parseInt(btn.dataset.id) - 1));
+            });
+            document.querySelectorAll('.move-down').forEach(btn => {
+                btn.addEventListener('click', () => moveWaypoint(parseInt(btn.dataset.id), parseInt(btn.dataset.id) + 1));
+            });
+        }
+        function removeWaypoint(id) {
+            markersLayer.removeLayer(waypoints[id].marker);
+            waypoints.splice(id, 1);
+            waypoints.forEach((wp, i) => {
+                wp.id = i;
+                const markerClass = i === 0 ? 'waypoint-marker-start' : i === waypoints.length - 1 ? 'waypoint-marker-end' : 'waypoint-marker-intermediate';
+                wp.marker.setIcon(L.divIcon({
+                    className: markerClass,
+                    html: `<div class="marker-label">${i + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }));
+                wp.marker.setPopupContent(`
+                    <div class="popup-content">
+                        <h4 class="font-bold mb-2">Punt ${i + 1}</h4>
+                        <p class="text-sm">Lat: ${wp.latlng.lat.toFixed(6)}</p>
+                        <p class="text-sm">Lng: ${wp.latlng.lng.toFixed(6)}</p>
+                        <button class="mt-2 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition remove-waypoint" data-id="${i}">
+                            <i class="fas fa-trash mr-1"></i>Verwijder
+                        </button>
+                    </div>
+                `);
+            });
+            updateWaypointUI();
+            showStatus('Punt verwijderd', 'success');
+        }
+        function moveWaypoint(fromIndex, toIndex) {
+            if (fromIndex < 0 || fromIndex >= waypoints.length || toIndex < 0 || toIndex >= waypoints.length) return;
+            [waypoints[fromIndex], waypoints[toIndex]] = [waypoints[toIndex], waypoints[fromIndex]];
+            waypoints.forEach((wp, i) => {
+                wp.id = i;
+                const markerClass = i === 0 ? 'waypoint-marker-start' : i === waypoints.length - 1 ? 'waypoint-marker-end' : 'waypoint-marker-intermediate';
+                wp.marker.setIcon(L.divIcon({
+                    className: markerClass,
+                    html: `<div class="marker-label">${i + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }));
+                wp.marker.setPopupContent(`
+                    <div class="popup-content">
+                        <h4 class="font-bold mb-2">Punt ${i + 1}</h4>
+                        <p class="text-sm">Lat: ${wp.latlng.lat.toFixed(6)}</p>
+                        <p class="text-sm">Lng: ${wp.latlng.lng.toFixed(6)}</p>
+                        <button class="mt-2 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition remove-waypoint" data-id="${i}">
+                            <i class="fas fa-trash mr-1"></i>Verwijder
+                        </button>
+                    </div>
+                `);
+            });
+            updateWaypointUI();
+            showStatus('Punt volgorde bijgewerkt', 'success');
+        }
+        function reverseRoute() {
+            if (waypoints.length < 2) {
+                showStatus('Minimaal 2 punten nodig om te keren', 'error');
+                return;
+            }
+            waypoints.reverse();
+            waypoints.forEach((wp, i) => {
+                wp.id = i;
+                const markerClass = i === 0 ? 'waypoint-marker-start' : i === waypoints.length - 1 ? 'waypoint-marker-end' : 'waypoint-marker-intermediate';
+                wp.marker.setIcon(L.divIcon({
+                    className: markerClass,
+                    html: `<div class="marker-label">${i + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }));
+                wp.marker.setPopupContent(`
+                    <div class="popup-content">
+                        <h4 class="font-bold mb-2">Punt ${i + 1}</h4>
+                        <p class="text-sm">Lat: ${wp.latlng.lat.toFixed(6)}</p>
+                        <p class="text-sm">Lng: ${wp.latlng.lng.toFixed(6)}</p>
+                        <button class="mt-2 text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition remove-waypoint" data-id="${i}">
+                            <i class="fas fa-trash mr-1"></i>Verwijder
+                        </button>
+                    </div>
+                `);
+            });
+            updateWaypointUI();
+            showStatus('Route omgekeerd', 'success');
+        }
+        function syncTimeInputs() {
+            timeInput.value = timeRange.value;
+            timeValue.textContent = `${timeRange.value} min`;
+        }
+        async function calculateRoute() {
+            if (waypoints.length < 2) {
+                showStatus('Minimaal 2 punten nodig', 'error');
+                return;
+            }
+            showLoading('showRoute');
+            try {
+                showStatus('Route wordt berekend...', 'success', 0);
+                const profile = transportMode.value;
+                const coordinates = waypoints.map(wp => [wp.latlng.lng, wp.latlng.lat]);
+                const response = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': ORS_API_KEY },
+                    body: JSON.stringify({ coordinates, instructions: false })
+                });
+                if (!response.ok) throw new Error(`API fout: ${response.status}`);
+                const data = await response.json();
+                currentRouteData = data;
+                if (routeLayer) map.removeLayer(routeLayer);
+                if (data.features?.length > 0) {
+                    routeLayer = L.geoJSON(data.features[0], {
+                        style: { color: transportColors[profile], weight: 6, opacity: 0.8 }
+                    }).addTo(map);
+                    map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
+                    const summary = data.features[0].properties.summary;
+                    distanceElement.textContent = summary.distance.toLocaleString("nl-NL", { maximumFractionDigits: 0 }) + " m";
+                    const minutes = Math.floor(summary.duration / 60);
+                    const seconds = Math.round(summary.duration % 60);
+                    durationElement.textContent = `${minutes} min ${seconds} sec`;
+                    routeInfo.classList.remove('hidden');
+                    showStatus('Route berekend', 'success');
+                } else {
+                    throw new Error('Geen route gevonden');
+                }
+            } catch (error) {
+                showStatus(`Fout bij routeberekening: ${error.message}`, 'error');
+            } finally {
+                hideLoading('showRoute');
+            }
+        }
+        async function calculateIsochrone() {
+            if (waypoints.length < 1) {
+                showStatus('Startpunt nodig', 'error');
+                return;
+            }
+            showLoading('showServiceArea');
+            try {
+                showStatus('Bereik wordt berekend...', 'success', 0);
+                const profile = transportMode.value;
+                const maxTime = parseInt(timeRange.value) * 60;
+                const start = waypoints[0].latlng;
+                const response = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': ORS_API_KEY },
+                    body: JSON.stringify({ locations: [[start.lng, start.lat]], range: [maxTime] })
+                });
+                if (!response.ok) throw new Error(`API fout: ${response.status}`);
+                const data = await response.json();
+                currentIsochroneData = data;
+                if (isochroneLayer) map.removeLayer(isochroneLayer);
+                isochroneLayer = L.geoJSON(data.features[0], {
+                    style: { color: '#ef4444', weight: 2, fillColor: '#ef4444', fillOpacity: 0.3 }
+                }).addTo(map);
+                map.fitBounds(isochroneLayer.getBounds(), { padding: [20, 20] });
+                const area = turf.area(data.features[0].geometry) / 1000000;
+                isochroneAreaElement.textContent = area.toLocaleString("nl-NL", { maximumFractionDigits: 2 }) + " km²";
+                serviceInfo.classList.remove('hidden');
+                showStatus('Bereik berekend', 'success');
+            } catch (error) {
+                showStatus(`Fout bij bereikberekening: ${error.message}`, 'error');
+            } finally {
+                hideLoading('showServiceArea');
+            }
+        }
+        function showDataExplorer() {
+            if (!currentRouteData && !currentIsochroneData) {
+                showStatus('Geen data beschikbaar', 'error');
+                return;
+            }
+            routeDataPreview.textContent = currentRouteData ? JSON.stringify(currentRouteData, null, 2) : 'Geen route data';
+            isochroneDataPreview.textContent = currentIsochroneData ? JSON.stringify(currentIsochroneData, null, 2) : 'Geen bereik data';
+            dataExplorerModal.classList.remove('hidden');
+        }
+        async function copyGeoJSONToClipboard() {
+            if (!currentRouteData && !currentIsochroneData) {
+                showStatus('Geen data beschikbaar', 'error');
+                return;
+            }
+            try {
+                const data = {
+                    type: 'FeatureCollection',
+                    features: [
+                        ...(currentRouteData ? currentRouteData.features : []),
+                        ...(currentIsochroneData ? currentIsochroneData.features : []),
+                        ...waypoints.map((wp, i) => ({
+                            type: 'Feature',
+                            geometry: { type: 'Point', coordinates: [wp.latlng.lng, wp.latlng.lat] },
+                            properties: { id: i + 1, type: i === 0 ? 'start' : i === waypoints.length - 1 ? 'end' : 'intermediate' }
+                        }))
+                    ]
+                };
+                const text = JSON.stringify(data, null, 2);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    showStatus('GeoJSON gekopieerd naar klembord', 'success');
+                } else {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showStatus('GeoJSON gekopieerd naar klembord', 'success');
+                }
+            } catch (error) {
+                console.error('Fout bij kopiëren:', error);
+                showStatus(`Kopiëren mislukt: ${error.message}`, 'error');
+            }
+        }
+        function downloadGeoJSON() {
+            if (!currentRouteData && !currentIsochroneData) {
+                showStatus('Geen data beschikbaar', 'error');
+                return;
+            }
+            const data = {
+                type: 'FeatureCollection',
+                features: [
+                    ...(currentRouteData ? currentRouteData.features : []),
+                    ...(currentIsochroneData ? currentIsochroneData.features : []),
+                    ...waypoints.map((wp, i) => ({
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [wp.latlng.lng, wp.latlng.lat] },
+                        properties: { id: i + 1, type: i === 0 ? 'start' : i === waypoints.length - 1 ? 'end' : 'intermediate' }
+                    }))
+                ]
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/geo+json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `den-helder-geojson-${Date.now()}.geojson`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('GeoJSON gedownload', 'success');
+        }
+        async function fetchSuggestions(query) {
+            if (!query) {
+                suggestionsContainer.style.display = 'none';
+                suggestionsContainer.innerHTML = '';
+                return;
+            }
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Den Helder')}&limit=5`);
+                const data = await response.json();
+                suggestionsContainer.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach((item, index) => {
+                        const suggestion = document.createElement('div');
+                        suggestion.className = 'suggestion-item';
+                        suggestion.tabIndex = 0;
+                        suggestion.textContent = item.display_name;
+                        suggestion.dataset.lat = item.lat;
+                        suggestion.dataset.lon = item.lon;
+                        suggestion.addEventListener('click', () => selectSuggestion(item));
+                        suggestion.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') selectSuggestion(item);
+                        });
+                        suggestionsContainer.appendChild(suggestion);
+                    });
+                    suggestionsContainer.style.display = 'block';
+                } else {
+                    suggestionsContainer.style.display = 'none';
+                }
+            } catch (error) {
+                suggestionsContainer.style.display = 'none';
+                showStatus('Zoeksuggesties mislukt', 'error');
+            }
+        }
+        function selectSuggestion(item) {
+            const latlng = [parseFloat(item.lat), parseFloat(item.lon)];
+            map.setView(latlng, 15);
+            addWaypoint(L.latLng(latlng));
+            searchInput.value = item.display_name.split(', Den Helder')[0].trim();
+            suggestionsContainer.style.display = 'none';
+            suggestionsContainer.innerHTML = '';
+            showStatus(`Locatie toegevoegd: ${item.display_name}`, 'success');
+        }
+        async function searchLocation() {
+            const query = searchInput.value.trim() + ', Den Helder';
+            if (!query) return;
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+                const data = await response.json();
+                if (data[0]) {
+                    const latlng = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+                    map.setView(latlng, 15);
+                    addWaypoint(L.latLng(latlng));
+                    searchInput.value = data[0].display_name.split(', Den Helder')[0].trim();
+                    suggestionsContainer.style.display = 'none';
+                    suggestionsContainer.innerHTML = '';
+                    showStatus(`Locatie toegevoegd: ${data[0].display_name}`, 'success');
+                } else {
+                    showStatus('Locatie niet gevonden', 'error');
+                }
+            } catch (error) {
+                showStatus('Zoeken mislukt', 'error');
+            }
+        }
+        // Event listeners
+        toggleSidebarBtn.addEventListener('click', toggleSidebar);
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+        timeInput.addEventListener('input', syncTimeInputs);
+        timeRange.addEventListener('input', syncTimeInputs);
+        map.on('click', e => addWaypoint(e.latlng));
+        addWaypointBtn.addEventListener('click', () => addWaypoint());
+        reverseRouteBtn.addEventListener('click', reverseRoute);
+        showRouteBtn.addEventListener('click', calculateRoute);
+        showServiceAreaBtn.addEventListener('click', calculateIsochrone);
+        clearAllBtn.addEventListener('click', () => {
+            waypoints.forEach(wp => markersLayer.removeLayer(wp.marker));
+            waypoints = [];
+            if (routeLayer) map.removeLayer(routeLayer);
+            if (isochroneLayer) map.removeLayer(isochroneLayer);
+            routeLayer = null;
+            isochroneLayer = null;
+            currentRouteData = null;
+            currentIsochroneData = null;
+            updateWaypointUI();
+            routeInfo.classList.add('hidden');
+            serviceInfo.classList.add('hidden');
+            suggestionsContainer.style.display = 'none';
+            suggestionsContainer.innerHTML = '';
+            searchInput.value = '';
+            showStatus('Alles gewist', 'success');
+        });
+        exportDataBtn.addEventListener('click', downloadGeoJSON);
+        exploreDataBtn.addEventListener('click', showDataExplorer);
+        closeExplorerBtn.addEventListener('click', () => dataExplorerModal.classList.add('hidden'));
+        copyGeoJSONBtn.addEventListener('click', copyGeoJSONToClipboard);
+        downloadGeoJSONBtn.addEventListener('click', downloadGeoJSON);
+        searchBtn.addEventListener('click', searchLocation);
+        searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') searchLocation(); });
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => fetchSuggestions(searchInput.value.trim()), 300);
+        });
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+                suggestionsContainer.style.display = 'none';
+                suggestionsContainer.innerHTML = '';
+            }
+        });
+        baseMapSelect.addEventListener('change', (e) => switchBaseMap(e.target.value));
+        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+        // Initialize
+        syncTimeInputs();
+        showStatus('Welkom! Klik op de kaart om punten toe te voegen.', 'success', 5000);
+        addWaypoint(L.latLng(52.9593, 4.7597));
+        addWaypoint(L.latLng(52.9500, 4.7700));
+    </script>
+</body>
+</html>
