@@ -1,0 +1,294 @@
+
+<!doctype html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Volume Meten</title>
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: var(--calcite-sans-family);
+        }
+        #view-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        arcgis-scene {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        calcite-alert {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            z-index: 300;
+        }
+        .esri-widget--button {
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+<div id="view-container">
+    <arcgis-scene id="main-scene" item-id="45f0389d12c44784891ac11342b94dd5" popup-disabled>
+        <!-- Volume measurement widget -->
+        <arcgis-volume-measurement slot="bottom-left" hide-elevation-input-unit-select hide-elevation-display-unit-select hide-area-display-unit-select ></arcgis-volume-measurement>
+        <!-- Navigation widgets -->
+        <arcgis-zoom slot="top-left"></arcgis-zoom>
+        <arcgis-navigation-toggle slot="top-left"></arcgis-navigation-toggle>
+        <arcgis-compass slot="top-left"></arcgis-compass>
+    </arcgis-scene>
+
+    <!-- Alerts -->
+    <calcite-alert icon label="Info" kind="info" scale="s" id="info-alert" auto-close="5000">
+        <div slot="title">3D BAG Viewer - Den Helder</div>
+        <div slot="message" id="alert-message"></div>
+    </calcite-alert>
+    <calcite-alert icon label="Waarschuwing" kind="warning" scale="s" id="warning-alert" auto-close="6000">
+        <div slot="title">Volume meten</div>
+        <div slot="message" id="warning-message"></div>
+    </calcite-alert>
+</div>
+
+<script type="module">
+    // Importeer alle benodigde modules
+    const [ 
+        SceneView, WebScene, Expand, BasemapGallery, LayerList, 
+        Fullscreen, SceneLayer, reactiveUtils, Ground, Basemap, LocalBasemapsSource
+    ] = await $arcgis.import([
+        "@arcgis/core/views/SceneView.js",
+        "@arcgis/core/WebScene.js",
+        "@arcgis/core/widgets/Expand.js",
+        "@arcgis/core/widgets/BasemapGallery.js",
+        "@arcgis/core/widgets/LayerList.js",
+        "@arcgis/core/widgets/Fullscreen.js",
+        "@arcgis/core/layers/SceneLayer.js",
+        "@arcgis/core/core/reactiveUtils.js",
+        "@arcgis/core/Ground.js",
+        "@arcgis/core/Basemap.js",
+        "@arcgis/core/widgets/BasemapGallery/support/LocalBasemapsSource.js"
+    ]);
+
+    // DOM elementen
+    const sceneElement = document.getElementById("main-scene");
+    const alertMsg = document.getElementById("alert-message");
+    const infoAlert = document.getElementById("info-alert");
+    const warningMsg = document.getElementById("warning-message");
+    const warningAlert = document.getElementById("warning-alert");
+    
+    let view, webscene, bagLayer;
+
+    async function initialize() {
+        try {
+            // Wacht tot het ArcGIS Scene webcomponent de view beschikbaar maakt
+            await sceneElement.viewOnReady();
+            view = sceneElement.view;
+            webscene = view.map;
+
+            console.log("✅ WebScene geladen. Standaard basemap wordt ingesteld op Topografisch (topo-vector).");
+
+            // ============================================================
+            // 1. CAMERA & EXTENT - FOCUS OP DEN HELDER
+            // ============================================================
+            view.camera = {
+                position: {
+                    x: 4.7589,
+                    y: 52.9551,
+                    z: 150,
+                    spatialReference: { wkid: 4326 }
+                },
+                heading: 0,
+                tilt: 65
+            };
+            
+            // Luchtachtergrondkleur (blauwe hemel)
+            view.background = {
+                type: "color",
+                color: [135, 206, 235, 1]
+            };
+            
+            // Performance profiel
+            view.qualityProfile = "medium";
+            
+            // Ground instellingen voor volume meten
+            if (webscene.ground) {
+                webscene.ground.navigationConstraint = "none";
+                view.constraints = {
+                    collision: { enabled: false }
+                };
+                webscene.ground.opacity = 1; // volledig dekkend
+            }
+            
+            // ============================================================
+            // 2. DEFAULT BASEMAP: TOPOGRAFISCH (topo-vector)
+            // ============================================================
+            // topo-vector is de klassieke topografische kaart van ESRI, werkt zonder API key
+            // en is uitstekend geschikt voor Nederland en de 3D BAG weergave
+            const topoBasemap = Basemap.fromId("topo-vector");
+            topoBasemap.title = "Topografisch Nederland";
+            
+            // Stel de WebScene basemap in op topografisch
+            webscene.basemap = topoBasemap;
+            
+            // Wacht tot de basemap volledig geladen is in de view
+            await reactiveUtils.whenOnce(() => webscene.basemap && webscene.basemap.loaded);
+            console.log("✅ Topografische basemap (topo-vector) actief als standaard.");
+            
+            // ============================================================
+            // 3. CUSTOM BASEMAP VIA PORTAL ITEM (ID: 46a87c20f09e4fc48fa3c38081e0cae6)
+            //    Deze wordt toegevoegd aan de gallery als optie
+            // ============================================================
+            let customPortalBasemap = null;
+            try {
+                customPortalBasemap = new Basemap({
+                    portalItem: {
+                        id: "46a87c20f09e4fc48fa3c38081e0cae6"
+                    },
+                    title: "Custom Nederland (portal item)",
+                    id: "custom-nl-portal"
+                });
+                await customPortalBasemap.load();
+                console.log("✅ Custom portal basemap geladen en beschikbaar in gallery.");
+            } catch (e) {
+                console.warn("Custom portal basemap kon niet laden, wordt niet toegevoegd aan gallery:", e);
+                customPortalBasemap = null;
+            }
+            
+            // ============================================================
+            // 4. BASEMAP GALLERY MET LOCALBASEMAPSSOURCE
+            //    Opties: Topografisch (default), Satelliet met labels (hybride), Custom portal item
+            // ============================================================
+            const basemapOptions = [
+                topoBasemap,                                    // Topografisch (standaard)
+                Basemap.fromId("hybrid"),                       // Satelliet met labels (hybride)
+            ];
+            
+            // Voeg custom portal basemap toe alleen als die succesvol is geladen
+            if (customPortalBasemap) {
+                basemapOptions.push(customPortalBasemap);
+            }
+            
+            const localSource = new LocalBasemapsSource({
+                basemaps: basemapOptions
+            });
+            
+            // Maak de BasemapGallery widget met de lokale source
+            const basemapGallery = new BasemapGallery({
+                view: view,
+                source: localSource,
+                activeBasemap: topoBasemap  // Zorg dat de gallery de topografische als actief toont
+            });
+            
+            // Voeg de gallery toe in een Expand widget rechtsboven
+            const basemapExpand = new Expand({
+                view,
+                content: basemapGallery,
+                expandIcon: "basemap",
+                expanded: false,
+                group: "top-right",
+                expandTooltip: "Kies achtergrondkaart (standaard: Topografisch)",
+                collapseTooltip: "Sluiten"
+            });
+            view.ui.add(basemapExpand, "top-right");
+            
+            // ============================================================
+            // 5. 3D BAG LAYER (Publiek, geen key nodig)
+            // ============================================================
+            bagLayer = new SceneLayer({
+                url: "https://tiles.arcgis.com/tiles/nSZVuSZjHpEZZbRo/arcgis/rest/services/3DBAG_WGS_EGM_V2/SceneServer",
+                title: "3D BAG Nederland (gebouwen)",
+                opacity: 1,
+                popupEnabled: false,
+                outFields: []
+            });
+            webscene.add(bagLayer);
+            await bagLayer.load();
+            console.log("✅ 3D BAG laag geladen - gebouwen zichtbaar in Den Helder");
+            
+            // ============================================================
+            // 6. EXTENT DEN HELDER + GO TO ANIMATIE & CLIPPING
+            // ============================================================
+            const denHelderExtent = {
+                xmin: 4.70,
+                ymin: 52.90,
+                xmax: 4.85,
+                ymax: 53.05,
+                spatialReference: { wkid: 4326 }
+            };
+            
+            await view.goTo({ target: denHelderExtent, tilt: 65, heading: 0 }, { duration: 1500 });
+            
+            // Clipping area voor betere performance (alleen Den Helder)
+            view.clippingArea = denHelderExtent;
+            
+            // ============================================================
+            // 7. EXTRA WIDGETS: LAYERLIST, FULLSCREEN
+            // ============================================================
+            const layerList = new LayerList({ view });
+            const layerListExpand = new Expand({
+                view,
+                content: layerList,
+                expandIcon: "layers",
+                expanded: false,
+                group: "top-right",
+                expandTooltip: "Lagenoverzicht",
+                collapseTooltip: "Sluiten"
+            });
+            view.ui.add(layerListExpand, "top-right");
+            
+            const fullscreen = new Fullscreen({ view });
+            view.ui.add(fullscreen, "top-right");
+            
+            // ============================================================
+            // 8. MELDINGEN & INFO
+            // ============================================================
+            warningMsg.textContent = "📐 Volume meten: Gebruik het icoon linksonder. Lagen zijn volledig ondoorzichtig voor correcte metingen.";
+            warningAlert.open = true;
+            
+            alertMsg.innerHTML = `✅ 3D BAG geladen | Den Helder<br>🗺️ Standaard achtergrond: <strong>Topografische kaart (topo-vector)</strong><br>📦 Volume meten actief | Gallery bevat ook hybride (satelliet+labels) en custom portal kaart.`;
+            infoAlert.open = true;
+            
+            // Kleine visuele check: forceer een refresh van de view
+            setTimeout(() => {
+                if (view && view.ready) {
+                    view.goTo(view.camera, { duration: 0 }).catch(e => console.warn("Refresh:", e));
+                    console.log("🔄 View ververst - topografische basemap volledig zichtbaar.");
+                }
+            }, 800);
+            
+            console.log("🎉 Viewer gestart | Default basemap: Topografisch (topo-vector) | Volume meten actief | Locatie: Den Helder");
+            
+            // Debug: toon actieve basemap in console
+            console.log("Actieve basemap:", webscene.basemap.title, "ID:", webscene.basemap.id);
+            
+        } catch (err) {
+            console.error("❌ Initialisatie fout:", err);
+            alertMsg.innerHTML = `Fout bij laden: ${err.message || "onbekende fout"}<br>Probeer de pagina te vernieuwen. Als het probleem blijft, gebruik dan de gallery om een andere basemap te kiezen.`;
+            infoAlert.open = true;
+            
+            // Fallback: probeer opnieuw met topo-vector via string
+            if (webscene && !webscene.basemap?.loaded) {
+                console.warn("Fallback naar topo-vector via string wegens fout");
+                try {
+                    webscene.basemap = "topo-vector";
+                    await webscene.basemap.load();
+                } catch (fallbackErr) {
+                    console.error("Fallback mislukt:", fallbackErr);
+                }
+            }
+        }
+    }
+    
+    // Start de applicatie
+    initialize();
+</script>
+</body>
+</html>
