@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Jutter van Den Helder - Sokoban</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
@@ -11,12 +10,7 @@
     <style>
         :root {
             --tile-size: 48px;
-            --transition-speed: 0.12s;
-        }
-
-        * {
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+            --transition-speed: 0.15s;
         }
 
         body {
@@ -27,7 +21,7 @@
             background-attachment: fixed;
             color: white;
             overscroll-behavior: none;
-            touch-action: pan-x pan-y; 
+            touch-action: none;
             transition: background-image 1s ease-in-out;
             margin: 0;
             display: flex;
@@ -35,6 +29,7 @@
             height: 100vh;
             width: 100vw;
             overflow: hidden;
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         body::before {
@@ -62,6 +57,8 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
             overflow: hidden;
             border: 2px solid rgba(255,255,255,0.15);
+            max-width: 100%;
+            max-height: 100%;
         }
 
         .game-layer {
@@ -171,28 +168,37 @@
             backdrop-filter: blur(8px);
         }
 
-        #mobile-controls button {
+        .ctrl-btn {
+            background: linear-gradient(145deg, rgba(59,130,246,0.6), rgba(37,99,235,0.4));
+            backdrop-filter: blur(10px);
+            border-radius: 14px;
+            padding: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
             transition: all 0.1s ease;
-            touch-action: manipulation;
-            font-size: 28px;
-            backdrop-filter: blur(12px);
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(255,255,255,0.2);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-        #mobile-controls button:active {
-            transform: scale(0.92);
-            background: rgba(59, 130, 246, 0.9);
         }
 
-        @media (max-width: 768px) {
-            .glass-panel {
-                margin-left: 8px;
-                margin-right: 8px;
+        .ctrl-btn:active {
+            transform: scale(0.85);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.6);
+        }
+
+        @media (max-width: 500px) {
+            .ctrl-btn {
+                padding: 8px;
+                font-size: 16px;
             }
-            #ui-story {
-                font-size: 11px;
-                max-width: 85vw;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            #mobile-controls {
+                opacity: 0.6;
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                transform: scale(0.8);
             }
         }
     </style>
@@ -213,44 +219,49 @@
         </div>
     </header>
 
-    <main class="flex-1 flex flex-col justify-center items-center p-4 relative overflow-hidden" id="main-container">
+    <main class="flex-1 flex flex-col items-center justify-start p-2 gap-2 overflow-hidden" id="main-container">
         <div id="game-board">
             <div id="layer-tiles" class="game-layer"></div>
             <div id="layer-targets" class="game-layer"></div>
             <div id="layer-entities" class="game-layer"></div>
         </div>
-        <p id="ui-story" class="mt-4 text-center text-sm text-gray-300 max-w-xs italic min-h-[40px] px-2"></p>
+
+        <!-- ✅ CONTROLS HIER -->
+        <div id="mobile-controls" class="grid grid-cols-3 gap-2 w-full max-w-[180px] mt-3">
+            <div></div>
+            <button class="ctrl-btn" data-dir="up">⬆️</button>
+            <div></div>
+
+            <button class="ctrl-btn" data-dir="left">⬅️</button>
+            <div></div>
+            <button class="ctrl-btn" data-dir="right">➡️</button>
+
+            <div></div>
+            <button class="ctrl-btn" data-dir="down">⬇️</button>
+            <div></div>
+        </div>
+
+        <!-- tekst -->
+        <p id="ui-story" class="mt-4 text-center text-base text-white font-medium max-w-sm px-4 py-3 rounded-xl bg-black/40 backdrop-blur-md shadow-lg leading-relaxed"></p>
     </main>
 
     <footer class="p-3 flex gap-3 justify-center z-10 mx-2 mb-2 glass-panel">
         <button id="btn-undo" class="flex-1 bg-white/10 hover:bg-white/20 disabled:opacity-30 py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-tighter transition-all">
             Herstel
         </button>
+        <button id="btn-hint" class="flex-1 bg-yellow-500/20 hover:bg-yellow-500/40 py-3 rounded-xl text-xs font-bold">
+            Hint
+        </button>
         <button id="btn-restart" class="flex-1 bg-white/10 hover:bg-white/20 py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-tighter transition-all">
             Herstart
         </button>
     </footer>
 
-    <!-- Mobile Controls (alleen zichtbaar op mobiel) -->
-    <div id="mobile-controls" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 hidden">
-        <div class="grid grid-cols-3 gap-3 w-48 text-center">
-            <div></div>
-            <button class="bg-white/20 rounded-xl py-3 text-3xl shadow-lg active:scale-95 transition" data-dx="0" data-dy="-1">⬆️</button>
-            <div></div>
-
-            <button class="bg-white/20 rounded-xl py-3 text-3xl shadow-lg active:scale-95 transition" data-dx="-1" data-dy="0">⬅️</button>
-            <div></div>
-            <button class="bg-white/20 rounded-xl py-3 text-3xl shadow-lg active:scale-95 transition" data-dx="1" data-dy="0">➡️</button>
-
-            <div></div>
-            <button class="bg-white/20 rounded-xl py-3 text-3xl shadow-lg active:scale-95 transition" data-dx="0" data-dy="1">⬇️</button>
-            <div></div>
-        </div>
-    </div>
-
-    <!-- Start Scherm -->
     <div id="start-overlay" class="fixed inset-0 flex flex-col items-center justify-center transition-opacity duration-700">
         <div class="glass-panel p-8 text-center max-w-sm mx-4 relative z-10">
+            <!-- NIEUWE FOTO -->
+            <img src="https://imagur.org/i/QlmJVXky" 
+                 class="w-full h-40 object-cover rounded-lg mb-4 opacity-90 shadow-lg">
             <h1 class="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-emerald-400 uppercase tracking-tighter">Jutter van Den Helder</h1>
             <p class="text-gray-100 text-sm mb-8 font-medium">Beheer de havenlogistiek en zet alle kratten op hun plek na de storm.</p>
             <button id="btn-start" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl text-lg shadow-xl shadow-blue-900/40 uppercase tracking-widest transition-transform active:scale-95">
@@ -283,9 +294,27 @@ const levelBackgrounds = {
 
 const THEMES = ['haven', 'strand', 'duinen', 'stad', 'storm'];
 
-// ====================== NIVEAUS (Level 22 is OPLOSBAAR gemaakt) ==================
+const LORE = [
+"Napoleon noemde Den Helder het Gibraltar van het Noorden.",
+"Onder je voeten liggen oude verdedigingslinies.",
+"De zee neemt… maar geeft ook terug.",
+"Willemsoord was ooit het hart van de marine.",
+"Bunkers fluisteren verhalen uit de oorlog.",
+"In Huisduinen kijk je uit over geschiedenis.",
+"De Lange Jaap waakt al jaren over de kust.",
+"De stormen hier vormen de stad én haar mensen."
+];
+
+const hints = [
+    "Duw nooit een krat in een hoek!",
+    "Blokkeer jezelf niet tegen muren.",
+    "Denk 2 stappen vooruit.",
+    "Soms moet je eerst ruimte maken.",
+    "Targets eerst vrijmaken helpt."
+];
+
 const LEVELS = [
-    { id: 1, name: "Introductie", story: "Welkom jutter! Begin met het verschuiven van je eerste krat naar het doel.", map: ["######", "#    #", "# @$.#", "#    #", "######"], par: 5 },
+    { id: 1, name: "Introductie", story: "Na een zware storm ligt de haven van Den Helder vol verloren vracht. Als jutter verzamel jij wat de zee teruggeeft. Maar tussen de kratten liggen verhalen van oorlog, schepen en overleven...", map: ["######", "#    #", "# @$.#", "#    #", "######"], par: 5 },
     { id: 2, name: "Basis Duwen", story: "Leren duwen is essentieel. Zorg dat je niet klem komt te zitten.", map: ["#######", "#  .  #", "#  $  #", "#  @  #", "#######"], par: 8 },
     { id: 3, name: "Iets Meer Nadenken", story: "De haven wordt krapper. Plan je route zorgvuldig.", map: ["  #### ", "###  # ", "#  $ # ", "#  . # ", "# $ .# ", "# @  # ", "###### "], par: 15 },
     { id: 4, name: "Echte Puzzel", story: "Nu begint het echte werk. Meerdere kratten, meerdere doelen.", map: ["  ####  ", "###  ###", "#      #", "# #$ # #", "# . .  #", "# #$ # #", "#  @   #", "########"], par: 25 },
@@ -306,9 +335,7 @@ const LEVELS = [
     { id: 19, name: "De Kruising", story: "Vier wegen, vier kratten. Kies je pad verstandig.", map: ["  #####  ", "### . ###", "#   $   #", "#.$ @ $.#", "#   $   #", "### . ###", "  #####  "], par: 25 },
     { id: 20, name: "Multi-Box Krapte", story: "Drie kratten, heel weinig ruimte.", map: ["############", "# . . .    #", "# $ $ $    #", "#   ###    #", "#    @     #", "#          #", "############"], par: 38 },
     { id: 21, name: "Vooruitkijken", story: "Plan vijf stappen vooruit.", map: ["############", "# . . . .  #", "#  $ ### $ #", "#    # #   #", "#  $     $ #", "#    @    #", "############"], par: 42 },
-    // ***** NIVEAU 22 - VERVANGEN DOOR EEN OPLOSBARE VERSIE (Strak maar eerlijk) *****
-    { id: 22, name: "Geen Fouten Toegestaan", story: "Strak maar eerlijk. Denk vooruit en blokkeer jezelf niet.", map: ["#########", "# . . . #", "# $ $ $ #", "#   @   #", "#       #", "#########"], par: 18 },
-    // ****************************************************************************
+    { id: 22, name: "Geen Fouten Toegestaan", story: "Eén verkeerde duw en het is voorbij. Gebruik de ruimte verstandig.", map: ["  ######  ", "###    ###", "#  $.$   #", "# $ . $  #", "#  $.$   #", "### @ ####", "  ######  "], par: 45 },
     { id: 23, name: "Dubbele Grendel", story: "Ontgrendel de weg naar de targets.", map: ["############", "# . . . .  #", "# $ ## ## $ #", "#   #  #   #", "#   $  $   #", "#    @     #", "############"], par: 48 },
     { id: 24, name: "Symmetrie Val", story: "Symmetrie kan verraderlijk zijn.", map: ["############", "# . . . .  #", "# $  ##  $ #", "#    $$    #", "#  ####    #", "#    @     #", "############"], par: 50 },
     { id: 25, name: "Krattenketting", story: "De kratten zijn van elkaar afhankelijk.", map: ["############", "# . . . .  #", "# $  $  $  #", "#  ### ### #", "#    $     #", "#    @     #", "############"], par: 55 },
@@ -327,29 +354,38 @@ let boxes = [];
 let player = { x: 0, y: 0, facingLeft: false };
 let moves = 0;
 let history = [];
+let combo = 0;
 let inputLocked = true;
 let audioCtx = null;
 
+// Cache DOM elements
+const uiMoves = document.getElementById('ui-moves');
+const uiLevel = document.getElementById('ui-level');
+const uiLevelName = document.getElementById('ui-level-name');
+const uiPar = document.getElementById('ui-par');
+const uiStory = document.getElementById('ui-story');
+const btnUndo = document.getElementById('btn-undo');
+const gameBoard = document.getElementById('game-board');
+
 function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioCtx.resume();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 function playNote(freq, type, dur, vol=0.08) {
     if (!audioCtx) return;
-    try {
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        g.gain.setValueAtTime(vol, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
-        osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + dur);
-    } catch(e) { console.warn(e); }
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+
+function vibrate(ms = 30) {
+    if (navigator.vibrate) navigator.vibrate(ms);
 }
 
 const sfx = {
@@ -357,22 +393,36 @@ const sfx = {
     push: () => playNote(140, 'square', 0.15, 0.05),
     bump: () => playNote(180, 'sawtooth', 0.08, 0.02),
     target: () => playNote(523, 'sine', 0.25, 0.07),
-    win: () => [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => playNote(f, 'sine', 0.4, 0.05), i * 100))
+    win: () => [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => playNote(f, 'sine', 0.4, 0.05), i * 100)),
+    hover: () => playNote(800, 'sine', 0.05, 0.02),
+    error: () => playNote(90, 'sawtooth', 0.2, 0.06),
+    stepCombo: () => [300, 350, 400].forEach((f,i)=>setTimeout(()=>playNote(f,'sine',0.1,0.03), i*50)),
 };
+
+document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('mouseenter', () => sfx.hover());
+});
 
 function loadLevel(idx) {
     const data = LEVELS[idx];
     grid = []; boxes = []; moves = 0; history = []; inputLocked = false;
     
+    // Cycle theme based on level index
     const themeKey = THEMES[idx % THEMES.length];
     document.body.style.backgroundImage = `url('${levelBackgrounds[themeKey]}')`;
+    if (themeKey === 'storm') {
+        document.body.style.filter = "contrast(1.2) brightness(0.9)";
+    }
     
-    document.getElementById('ui-level').innerText = data.id;
-    document.getElementById('ui-level-name').innerText = data.name;
-    document.getElementById('ui-par').innerText = data.par;
-    document.getElementById('ui-story').innerText = data.story;
-    document.getElementById('ui-moves').innerText = 0;
-    document.getElementById('btn-undo').disabled = true;
+    uiLevel.innerText = data.id;
+    uiLevelName.innerText = data.name;
+    uiPar.innerText = data.par;
+    const randomLore = LORE[Math.floor(Math.random() * LORE.length)];
+    uiStory.innerHTML = 
+        `<span class="text-blue-300 font-semibold">${data.story}</span><br><br>
+         <span class="text-emerald-300 text-sm">🌊 ${randomLore}</span>`;
+    uiMoves.innerText = 0;
+    btnUndo.disabled = true;
 
     const layerT = document.getElementById('layer-tiles');
     const layerG = document.getElementById('layer-targets');
@@ -380,9 +430,12 @@ function loadLevel(idx) {
     layerT.innerHTML = layerG.innerHTML = layerE.innerHTML = '';
 
     let maxCols = 0;
+    data.map.forEach((line) => {
+        if (line.length > maxCols) maxCols = line.length;
+    });
+
     data.map.forEach((line, y) => {
-        const row = line.split('');
-        if (row.length > maxCols) maxCols = row.length;
+        const row = line.padEnd(maxCols, ' ').split('');
         const gridRow = [];
         row.forEach((char, x) => {
             let cell = '.';
@@ -390,7 +443,7 @@ function loadLevel(idx) {
             else if (char === '.' || char === '+' || char === '*') cell = '*';
             gridRow.push(cell);
             if (char === '@' || char === '+') player = { x, y, facingLeft: player.facingLeft };
-            if (char === '$' || char === '*') boxes.push({ id: `b-${boxes.length}-${Date.now()}-${Math.random()}`, x, y });
+            if (char === '$' || char === '*') boxes.push({ id: `b-${boxes.length}`, x, y });
         });
         grid.push(gridRow);
     });
@@ -401,15 +454,32 @@ function loadLevel(idx) {
 }
 
 function setupScale(cols, rows) {
-    const container = document.getElementById('main-container');
-    const availableW = container.clientWidth - 40;
-    const availableH = container.clientHeight - 100;
-    const size = Math.min(70, Math.floor(availableW / cols), Math.floor(availableH / rows));
-    const finalSize = Math.max(36, size);
-    document.documentElement.style.setProperty('--tile-size', `${finalSize}px`);
-    const board = document.getElementById('game-board');
-    board.style.width = `${cols * finalSize}px`;
-    board.style.height = `${rows * finalSize}px`;
+    const header = document.querySelector('header');
+    const footer = document.querySelector('footer');
+    const controls = document.getElementById('mobile-controls');
+    const story = document.getElementById('ui-story');
+
+    const usedHeight =
+        header.offsetHeight +
+        footer.offsetHeight +
+        (controls ? controls.offsetHeight : 0) +
+        story.offsetHeight +
+        60; // margin buffer
+
+    const availableW = window.innerWidth - 20;
+    const availableH = window.innerHeight - usedHeight;
+
+    const size = Math.max(24, Math.min(
+        64, // max size for big screens
+        Math.floor(availableW / cols),
+        Math.floor(availableH / rows)
+    ));
+
+    document.documentElement.style.setProperty('--tile-size', `${size}px`);
+
+    const board = gameBoard;
+    board.style.width = `${cols * size}px`;
+    board.style.height = `${rows * size}px`;
 }
 
 function renderGrid(cols, rows) {
@@ -444,13 +514,7 @@ function renderEntities() {
         layerE.appendChild(pEl);
     }
     pEl.style.transform = `translate(${player.x * 100}%, ${player.y * 100}%)`;
-    const innerDiv = pEl.querySelector('.player-inner');
-    if(innerDiv) innerDiv.classList.toggle('facing-left', player.facingLeft);
-
-    const existingBoxIds = new Set(boxes.map(b => b.id));
-    document.querySelectorAll('.entity.box').forEach(el => {
-        if(!existingBoxIds.has(el.id)) el.remove();
-    });
+    pEl.querySelector('.player-inner').classList.toggle('facing-left', player.facingLeft);
 
     boxes.forEach(b => {
         let bEl = document.getElementById(b.id);
@@ -462,13 +526,14 @@ function renderEntities() {
             layerE.appendChild(bEl);
         }
         bEl.style.transform = `translate(${b.x * 100}%, ${b.y * 100}%)`;
-        if (grid[b.y] && grid[b.y][b.x] === '*') bEl.classList.add('on-target');
-        else bEl.classList.remove('on-target');
+        bEl.classList.toggle('on-target', grid[b.y][b.x] === '*');
     });
 }
 
 function tryMove(dx, dy) {
     if (inputLocked) return;
+    inputLocked = true;
+    setTimeout(() => inputLocked = false, 120);
     
     if (dx < 0) player.facingLeft = true;
     if (dx > 0) player.facingLeft = false;
@@ -476,6 +541,8 @@ function tryMove(dx, dy) {
     const nx = player.x + dx, ny = player.y + dy;
     if (!grid[ny] || grid[ny][nx] === '#' || grid[ny][nx] === undefined) { 
         sfx.bump(); 
+        combo = 0;
+        vibrate(100);
         renderEntities(); 
         return; 
     }
@@ -484,20 +551,20 @@ function tryMove(dx, dy) {
     if (!box) {
         saveHistory();
         player.x = nx; player.y = ny;
-        moves++; sfx.move();
+        moves++; sfx.move(); vibrate(20);
         finishMove();
         return;
     }
 
     const bx = nx + dx, by = ny + dy;
     if (!grid[by] || grid[by][bx] === '#' || grid[by][bx] === undefined || boxes.find(b => b.x === bx && b.y === by)) {
-        sfx.bump(); renderEntities(); return;
+        sfx.error(); combo = 0; vibrate(100); renderEntities(); return;
     }
 
     saveHistory();
     box.x = bx; box.y = by;
     player.x = nx; player.y = ny;
-    moves++; sfx.push();
+    moves++; sfx.push(); vibrate(50);
     if (grid[by][bx] === '*') sfx.target();
     finishMove();
 }
@@ -511,17 +578,26 @@ function undo() {
     if (!history.length || inputLocked) return;
     const s = history.pop();
     player = s.p; boxes = s.b; moves = s.m;
-    if (!history.length) document.getElementById('btn-undo').disabled = true;
-    document.getElementById('ui-moves').innerText = moves;
+    if (!history.length) btnUndo.disabled = true;
+    uiMoves.innerText = moves;
     renderEntities();
 }
 
 function finishMove() {
-    document.getElementById('ui-moves').innerText = moves;
+    combo++;
+    if (combo >= 3) {
+        sfx.stepCombo();
+    }
+    uiMoves.innerText = moves;
     renderEntities();
-    if (boxes.every(b => grid[b.y] && grid[b.y][b.x] === '*')) {
+    document.getElementById('player').style.transform += " scale(1.1)";
+    setTimeout(() => {
+        document.getElementById('player').style.transform = 
+        `translate(${player.x * 100}%, ${player.y * 100}%)`;
+    }, 100);
+    if (boxes.every(b => grid[b.y][b.x] === '*')) {
         inputLocked = true;
-        setTimeout(() => { sfx.win(); showWin(); }, 200);
+        setTimeout(() => { sfx.win(); showWin(); }, 500);
     }
 }
 
@@ -533,85 +609,83 @@ function showWin() {
     
     const par = LEVELS[currentLevelIdx].par;
     starContainer.innerText = moves <= par ? "⭐⭐⭐" : (moves <= par * 1.4 ? "⭐⭐" : "⭐");
+    starContainer.style.transform = "scale(1.5)";
+    setTimeout(() => starContainer.style.transform = "scale(1)", 300);
     
     overlay.classList.remove('opacity-0', 'pointer-events-none');
     panel.classList.remove('scale-90');
 }
 
-// Mobiele detectie en controllers koppelen
-function isMobile() {
-    return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// Globale functies voor buttons (moeten bereikbaar zijn via onclick in HTML)
-window.tryMove = tryMove;
-
-window.addEventListener('load', () => {
-    if (isMobile()) {
-        const mobileControlsDiv = document.getElementById('mobile-controls');
-        if(mobileControlsDiv) mobileControlsDiv.classList.remove('hidden');
-        
-        // Event listeners toevoegen voor touch om te voorkomen dat scroll triggered wordt
-        const btns = document.querySelectorAll('#mobile-controls button');
-        btns.forEach(btn => {
-            btn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                const dx = parseInt(btn.getAttribute('data-dx') || '0');
-                const dy = parseInt(btn.getAttribute('data-dy') || '0');
-                if(dx !== 0 || dy !== 0) tryMove(dx, dy);
-            });
-            btn.addEventListener('click', (e) => {
-                const dx = parseInt(btn.getAttribute('data-dx') || '0');
-                const dy = parseInt(btn.getAttribute('data-dy') || '0');
-                if(dx !== 0 || dy !== 0) tryMove(dx, dy);
-            });
-        });
-    }
-});
-
 window.addEventListener('keydown', e => {
     initAudio();
-    if (["ArrowUp", "w"].includes(e.key)) { e.preventDefault(); tryMove(0, -1); }
-    if (["ArrowDown", "s"].includes(e.key)) { e.preventDefault(); tryMove(0, 1); }
-    if (["ArrowLeft", "a"].includes(e.key)) { e.preventDefault(); tryMove(-1, 0); }
-    if (["ArrowRight", "d"].includes(e.key)) { e.preventDefault(); tryMove(1, 0); }
-    if (e.key === 'z' && e.ctrlKey) { e.preventDefault(); undo(); }
+    if (["ArrowUp", "w"].includes(e.key)) tryMove(0, -1);
+    if (["ArrowDown", "s"].includes(e.key)) tryMove(0, 1);
+    if (["ArrowLeft", "a"].includes(e.key)) tryMove(-1, 0);
+    if (["ArrowRight", "d"].includes(e.key)) tryMove(1, 0);
+    if (e.key === 'z' && e.ctrlKey) undo();
 });
 
 let tX, tY;
-window.addEventListener('touchstart', e => { 
-    if(e.touches.length) { tX = e.touches[0].clientX; tY = e.touches[0].clientY; }
-    initAudio(); 
-});
+window.addEventListener('touchstart', e => { tX = e.touches[0].clientX; tY = e.touches[0].clientY; initAudio(); });
 window.addEventListener('touchend', e => {
     if (inputLocked) return;
-    if(e.changedTouches.length) {
-        const dx = e.changedTouches[0].clientX - tX, dy = e.changedTouches[0].clientY - tY;
-        if (Math.abs(dx) > 25 || Math.abs(dy) > 25) {
-            if (Math.abs(dx) > Math.abs(dy)) tryMove(dx > 0 ? 1 : -1, 0);
-            else tryMove(0, dy > 0 ? 1 : -1);
-        }
+
+    const dx = e.changedTouches[0].clientX - tX;
+    const dy = e.changedTouches[0].clientY - tY;
+
+    const threshold = 40; // gevoeliger
+
+    if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+
+    initAudio();
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+        tryMove(dx > 0 ? 1 : -1, 0);
+    } else {
+        tryMove(0, dy > 0 ? 1 : -1);
     }
 });
 
 document.getElementById('btn-start').onclick = () => {
     initAudio();
-    const startOverlay = document.getElementById('start-overlay');
-    startOverlay.style.opacity = '0';
-    setTimeout(() => { startOverlay.remove(); loadLevel(0); }, 700);
+    document.getElementById('start-overlay').style.opacity = '0';
+    setTimeout(() => { document.getElementById('start-overlay').remove(); loadLevel(0); }, 700);
 };
 
 document.getElementById('btn-restart').onclick = () => loadLevel(currentLevelIdx);
 document.getElementById('btn-undo').onclick = undo;
+document.getElementById('btn-hint').onclick = () => {
+    const hint = hints[Math.floor(Math.random() * hints.length)];
+    uiStory.innerHTML = `<span class="text-yellow-300 font-bold">💡 Hint: ${hint}</span>`;
+};
 document.getElementById('btn-next').onclick = () => {
-    const winOverlay = document.getElementById('win-overlay');
-    winOverlay.classList.add('opacity-0', 'pointer-events-none');
+    document.getElementById('win-overlay').classList.add('opacity-0', 'pointer-events-none');
     document.getElementById('win-panel').classList.add('scale-90');
     currentLevelIdx = (currentLevelIdx + 1) % LEVELS.length;
     setTimeout(() => loadLevel(currentLevelIdx), 400);
 };
 
-window.onresize = () => { if (grid.length && document.getElementById('game-board')) setupScale(grid[0].length, grid.length); };
+// Mobile button controls
+document.querySelectorAll('.ctrl-btn').forEach(btn => {
+    btn.addEventListener('touchstart', () => {
+        btn.style.transform = 'scale(0.85)';
+    });
+    btn.addEventListener('touchend', () => {
+        btn.style.transform = 'scale(1)';
+    });
+    btn.addEventListener('click', () => {
+        initAudio();
+
+        const dir = btn.dataset.dir;
+
+        if (dir === 'up') tryMove(0, -1);
+        if (dir === 'down') tryMove(0, 1);
+        if (dir === 'left') tryMove(-1, 0);
+        if (dir === 'right') tryMove(1, 0);
+    });
+});
+
+window.onresize = () => { if (grid.length) setupScale(grid[0].length, grid.length); };
 </script>
 </body>
 </html>
